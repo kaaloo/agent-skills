@@ -1,29 +1,29 @@
 ---
 name: bare-repo-workspaces
-description: Git worktree operations using Worktrunk (wt). LOAD THIS SKILL whenever the user mentions "worktree", "new worktree", "create a worktree", "switch to a branch", "start work on a new feature/branch", "new bare repo workspace", or asks to work in a new/existing worktree. DO NOT run raw `git worktree` commands — this skill handles the bare repo pattern and hook lifecycle. If the user's memory mentions "worktrees/" paths, this skill is REQUIRED. Covers: creating worktrees, switching branches, cleanup, and the copy-ignored workflow for .env propagation.
+description: >-
+  Git worktree operations using Worktrunk (wt). Use when the user mentions
+  "worktree", "new worktree", "create a worktree", "switch to a branch", "start work on a
+  new feature/branch", "new bare repo workspace", or asks to work in a new/existing worktree.
+  DO NOT run raw `git worktree` commands — this skill handles the bare repo pattern and hook
+  lifecycle. If the user's memory mentions "worktrees/" paths, this skill is REQUIRED.
+  Covers: creating worktrees, switching branches, cleanup, and the copy-ignored workflow for
+  .env propagation.
 ---
-
 # Bare Repo Workspaces
-
 Keep all your worktrees inside one project folder — clean, organized, self-contained.
 
 > **Tooling**: [Worktrunk](https://worktrunk.dev) (`wt`) is the preferred tool for all worktree operations. It wraps `git worktree` with ergonomic commands, lifecycle hooks, and `copy-ignored` for cache/env sharing. Install: `brew install worktrunk && wt config shell install`.
-
 ## Scripts
-
 This skill includes helper scripts in `scripts/`:
 
 | Script | Purpose |
 |--------|---------|
 | `setup-workspace.sh` | One-time setup: create bare repo workspace from URL or upgrade existing checkout. |
 | `doctor.sh` | Diagnose and fix bare repo workspace issues (e.g., Antigravity compatibility). |
-
 ### doctor.sh — Diagnose and fix workspace issues
-
 ```bash
 # Diagnose only
 bash ~/.letta/skills/bare-repo-workspaces/scripts/doctor.sh ~/Code/alliance/ragtime
-
 # Diagnose and fix
 bash ~/.letta/skills/bare-repo-workspaces/scripts/doctor.sh --fix ~/Code/alliance/skills
 ```
@@ -40,9 +40,7 @@ bash ~/.letta/skills/bare-repo-workspaces/scripts/doctor.sh --fix ~/Code/allianc
 - `wt remove feat/my-feature` — clean up after merge
 
 **Use `setup-workspace.sh` only for initial workspace creation** — it handles edge cases like detaching HEAD before worktree creation.
-
 ## Why
-
 Standard `git worktree add ../feature` scatters directories alongside real repos. After a few months, you can't tell worktrees from clones at a glance.
 
 The bare repo pattern fixes this:
@@ -65,22 +63,17 @@ my-project/
 - Shared files (`.env`, build caches) are propagated to new worktrees automatically via `wt step copy-ignored` — no symlinks needed
 - Tool-specific config folders that should be scoped to the whole project (not per-branch) belong at the **workspace root as real directories** — not inside worktrees, not as symlinks
 - **Version manager config files** (`.prototools`, `.tool-versions`) must be **symlinked** at the workspace root to the primary worktree's file, so tools like proto/asdf resolve correct versions when the agent's shell starts in the workspace root (not a worktree). Create: `ln -s main/.prototools .prototools`
-
 ---
-
 ## Worktrunk Hooks (`.config/wt.toml`)
-
 Commit this file to the repo — it's shared with the team and automates worktree setup:
 
 ```toml
 # .config/wt.toml
-
 [pre-start]
 # Blocking — runs before post-start hooks or --execute
 # ⚠️  Only fires when creating a NEW worktree (wt switch --create)
 deps = "pnpm install"   # Node.js
 # deps = "uv sync"      # Python
-
 [post-start]
 # Background — runs after worktree is ready
 # ⚠️  Only fires when creating a NEW worktree (wt switch --create)
@@ -93,19 +86,15 @@ deps = "pnpm install"
 ```
 
 > **Hook lifecycle summary**: `pre-start` → new worktrees only (blocking). `post-start` → new worktrees only (background). `post-switch` → every switch, new or existing (background). If you only have `pre-start` / `post-start`, running `wt switch main` on an existing worktree will **not** install deps.
-
 ### `.worktreeinclude` — scope what `copy-ignored` copies
-
 By default `copy-ignored` copies ALL gitignored files. Scope it with `.worktreeinclude`:
 
 ```
 # .worktreeinclude
 # Must be gitignored AND listed here to be copied.
-
 # Environment files
 .env
 .envrc
-
 # Build caches
 # .next/ intentionally excluded — Next.js incremental cache is branch-specific;
 # copying from main can produce stale/incorrect builds on feature branches.
@@ -114,24 +103,18 @@ By default `copy-ignored` copies ALL gitignored files. Scope it with `.worktreei
 ```
 
 > **`.next/` vs `.turbo/`**: Don't copy `.next/` — its incremental cache is tied to specific file content and can produce incorrect builds if copied across branches. Do copy `.turbo/` — it's content-addressed; stale entries are simply ignored, valid hits speed up first builds.
-
 ### Project hooks require one-time approval
-
 The first `wt switch --create` after the config lands will prompt:
 ```
 ▲ repo needs approval to execute 2 commands: [y/N]
 ```
 Press `y` — saved to `~/.config/worktrunk/config.toml`, never asked again (unless the command changes).
-
 ---
-
 ## Worktrunk User Config
-
 `worktree-path` at the **top level** of `~/.config/worktrunk/config.toml` is a global default that applies to every repo. Per-project entries under `[projects."..."]` override it when needed.
 
 ```toml
 # ~/.config/worktrunk/config.toml
-
 # Global default — all repos use <branch-sanitized>/ at workspace root
 worktree-path = "{{ branch | sanitize }}"
 ```
@@ -143,9 +126,7 @@ If one repo needs a different layout, override just that one:
 [projects."github.com/org/legacy-repo"]
 worktree-path = "../.worktrees/{{ branch | sanitize }}"
 ```
-
 ### Auto-sync primary worktree before switch
-
 `wt switch --create` branches from the local default branch. If the primary worktree is behind `origin`, new worktrees start stale — causing merge conflicts later. Add a `pre-switch` hook to auto-pull:
 
 ```toml
@@ -162,13 +143,9 @@ For repos where the primary worktree is a sibling (not inside the repo):
 [projects."github.com/org/other-repo"]
 worktree-path = "{{ branch | sanitize }}"
 ```
-
 ---
-
 ## Daily Workflow
-
 ### Create a feature worktree (interactive terminal)
-
 > **⚠️ CRITICAL: Run `wt switch --create` from INSIDE the primary worktree (e.g., `main/`), NOT from the workspace root.**
 >
 > If run from the workspace root, `git rev-parse --show-toplevel` fails (not a work tree), `wt` falls back to `git-common-dir` (`.bare/`), and the worktree may be created inside `.bare/` instead of workspace root. Those malformed worktrees cause pre-commit to fail (`git toplevel unexpectedly empty`).
