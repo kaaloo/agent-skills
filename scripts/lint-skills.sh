@@ -8,7 +8,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SKILLS_DIR="$ROOT_DIR/skills"
-VALIDATE_SKILL="${SKILL_LINTER:-$HOME/.agents/skills/skill-linter/scripts/validate-skill.sh}"
+VALIDATE_SKILL="${SKILL_LINTER:-$ROOT_DIR/.agents/skills/skill-linter/scripts/validate-skill.sh}"
 
 status=0
 
