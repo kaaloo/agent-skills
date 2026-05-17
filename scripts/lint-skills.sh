@@ -22,7 +22,10 @@ else
     echo "[FAIL] No skills directory found at $SKILLS_DIR" >&2
     exit 1
   fi
-  mapfile -t skill_dirs < <(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d | sort)
+  skill_dirs=()
+  while IFS= read -r skill_dir; do
+    skill_dirs+=("$skill_dir")
+  done < <(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d | sort)
 fi
 
 if [ "${#skill_dirs[@]}" -eq 0 ]; then
@@ -60,7 +63,7 @@ def frontmatter_and_body(path)
   raw = File.binread(path)
   if raw.start_with?("\xEF\xBB\xBF".b)
     fail "#{path}: UTF-8 BOM before frontmatter delimiter can break skill loaders"
-    raw = raw.byteslice(3..)
+    raw = raw.byteslice(3, raw.bytesize - 3)
   end
 
   text = raw.force_encoding('UTF-8')
@@ -75,20 +78,29 @@ def frontmatter_and_body(path)
     return [nil, nil]
   end
 
-  closing_index = lines[1..]&.index('---')
+  tail = lines[1..-1] || []
+  closing_index = tail.index('---')
   unless closing_index
     fail "#{path}: missing closing frontmatter delimiter"
     return [nil, nil]
   end
 
   closing_line = closing_index + 1
-  [lines[1...closing_line].join("\n"), lines[(closing_line + 1)..]&.join("\n") || '']
+  body_lines = lines[(closing_line + 1)..-1] || []
+  [lines[1...closing_line].join("\n"), body_lines.join("\n")]
+end
+
+def safe_load_yaml(frontmatter)
+  YAML.safe_load(frontmatter, permitted_classes: [], aliases: false)
+rescue ArgumentError
+  # Ruby/Psych versions before keyword-argument support use positional args.
+  YAML.safe_load(frontmatter, [], [], false)
 end
 
 def validate_frontmatter(skill_dir, skill_file, frontmatter)
   data = nil
   begin
-    data = YAML.safe_load(frontmatter, permitted_classes: [], aliases: false)
+    data = safe_load_yaml(frontmatter)
   rescue Psych::Exception => e
     fail "#{skill_file}: invalid YAML frontmatter: #{e.message}"
     return nil
@@ -158,14 +170,14 @@ def validate_structure(skill_dir, skill_file)
     return
   end
 
-  line_count = File.readlines(skill_file, chomp: true).length
+  line_count = File.foreach(skill_file).count
   if line_count > 500
     fail "#{skill_file}: line count exceeds 500 (#{line_count})"
   else
     pass "Line count: #{line_count}/500"
   end
 
-  Dir.children(skill_dir).sort.each do |entry|
+  Dir.entries(skill_dir).reject { |entry| entry == '.' || entry == '..' }.sort.each do |entry|
     path = File.join(skill_dir, entry)
     next unless File.directory?(path)
     fail "#{skill_dir}: invalid subdirectory '#{entry}' (allowed: scripts, references, assets)" unless ALLOWED_DIRS.include?(entry)
@@ -173,7 +185,7 @@ def validate_structure(skill_dir, skill_file)
 end
 
 ARGV.each do |skill_dir|
-  skill_dir = skill_dir.delete_suffix('/')
+  skill_dir = skill_dir.sub(%r{/\z}, '')
   skill_file = File.join(skill_dir, 'SKILL.md')
   puts
   puts "==> #{skill_dir}"

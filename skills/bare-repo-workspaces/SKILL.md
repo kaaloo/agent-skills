@@ -9,18 +9,24 @@ description: >-
   Covers: creating worktrees, switching branches, cleanup, and the copy-ignored workflow for
   .env propagation.
 ---
+
 # Bare Repo Workspaces
+
 Keep all your worktrees inside one project folder — clean, organized, self-contained.
 
 > **Tooling**: [Worktrunk](https://worktrunk.dev) (`wt`) is the preferred tool for all worktree operations. It wraps `git worktree` with ergonomic commands, lifecycle hooks, and `copy-ignored` for cache/env sharing. Install: `brew install worktrunk && wt config shell install`.
+
 ## Scripts
+
 This skill includes helper scripts in `scripts/`:
 
 | Script | Purpose |
 |--------|---------|
 | `setup-workspace.sh` | One-time setup: create bare repo workspace from URL or upgrade existing checkout. |
 | `doctor.sh` | Diagnose and fix bare repo workspace issues (e.g., Antigravity compatibility). |
+
 ### doctor.sh — Diagnose and fix workspace issues
+
 ```bash
 # Diagnose only
 bash ~/.letta/skills/bare-repo-workspaces/scripts/doctor.sh ~/Code/alliance/ragtime
@@ -29,18 +35,22 @@ bash ~/.letta/skills/bare-repo-workspaces/scripts/doctor.sh --fix ~/Code/allianc
 ```
 
 **Checks for:**
+
 - Antigravity compatibility (repositoryformatversion, relative paths config)
 - Relative vs absolute paths in `.git` files and `gitdir` files
 - Missing `.git` pointer file at workspace root
 
 **For daily workflow, use `wt` commands:**
+
 - `wt switch --create feat/my-feature` — create a new worktree
 - `wt switch main` — switch to existing worktree
 - `wt list` — show all worktrees
 - `wt remove feat/my-feature` — clean up after merge
 
 **Use `setup-workspace.sh` only for initial workspace creation** — it handles edge cases like detaching HEAD before worktree creation.
+
 ## Why
+
 Standard `git worktree add ../feature` scatters directories alongside real repos. After a few months, you can't tell worktrees from clones at a glance.
 
 The bare repo pattern fixes this:
@@ -58,13 +68,17 @@ my-project/
 ```
 
 **Key principles:**
+
 - `main/` is the **primary worktree** and source of truth for all shared files
 - **All** worktrees — primary and feature branches alike — live directly in the workspace root, named using `{{ branch | sanitize }}` (slashes become dashes)
 - Shared files (`.env`, build caches) are propagated to new worktrees automatically via `wt step copy-ignored` — no symlinks needed
 - Tool-specific config folders that should be scoped to the whole project (not per-branch) belong at the **workspace root as real directories** — not inside worktrees, not as symlinks
 - **Version manager config files** (`.prototools`, `.tool-versions`) must be **symlinked** at the workspace root to the primary worktree's file, so tools like proto/asdf resolve correct versions when the agent's shell starts in the workspace root (not a worktree). Create: `ln -s main/.prototools .prototools`
+
 ---
+
 ## Worktrunk Hooks (`.config/wt.toml`)
+
 Commit this file to the repo — it's shared with the team and automates worktree setup:
 
 ```toml
@@ -86,7 +100,9 @@ deps = "pnpm install"
 ```
 
 > **Hook lifecycle summary**: `pre-start` → new worktrees only (blocking). `post-start` → new worktrees only (background). `post-switch` → every switch, new or existing (background). If you only have `pre-start` / `post-start`, running `wt switch main` on an existing worktree will **not** install deps.
+
 ### `.worktreeinclude` — scope what `copy-ignored` copies
+
 By default `copy-ignored` copies ALL gitignored files. Scope it with `.worktreeinclude`:
 
 ```
@@ -103,14 +119,21 @@ By default `copy-ignored` copies ALL gitignored files. Scope it with `.worktreei
 ```
 
 > **`.next/` vs `.turbo/`**: Don't copy `.next/` — its incremental cache is tied to specific file content and can produce incorrect builds if copied across branches. Do copy `.turbo/` — it's content-addressed; stale entries are simply ignored, valid hits speed up first builds.
+
 ### Project hooks require one-time approval
+
 The first `wt switch --create` after the config lands will prompt:
+
 ```
 ▲ repo needs approval to execute 2 commands: [y/N]
 ```
+
 Press `y` — saved to `~/.config/worktrunk/config.toml`, never asked again (unless the command changes).
+
 ---
+
 ## Worktrunk User Config
+
 `worktree-path` at the **top level** of `~/.config/worktrunk/config.toml` is a global default that applies to every repo. Per-project entries under `[projects."..."]` override it when needed.
 
 ```toml
@@ -126,7 +149,9 @@ If one repo needs a different layout, override just that one:
 [projects."github.com/org/legacy-repo"]
 worktree-path = "../.worktrees/{{ branch | sanitize }}"
 ```
+
 ### Auto-sync primary worktree before switch
+
 `wt switch --create` branches from the local default branch. If the primary worktree is behind `origin`, new worktrees start stale — causing merge conflicts later. Add a `pre-switch` hook to auto-pull:
 
 ```toml
@@ -139,13 +164,18 @@ sync = "test -d \"{{ repo_path }}/main\" && git -C \"{{ repo_path }}/main\" pull
 This runs before every `wt switch`, fast-forwarding the primary worktree to match origin. `test -d` ensures the hook skips gracefully when no worktree exists yet. `--ff-only` ensures it never creates merge commits, and `|| true` means it won't block if there's no network.
 
 For repos where the primary worktree is a sibling (not inside the repo):
+
 ```toml
 [projects."github.com/org/other-repo"]
 worktree-path = "{{ branch | sanitize }}"
 ```
+
 ---
+
 ## Daily Workflow
+
 ### Create a feature worktree (interactive terminal)
+
 > **⚠️ CRITICAL: Run `wt switch --create` from INSIDE the primary worktree (e.g., `main/`), NOT from the workspace root.**
 >
 > If run from the workspace root, `git rev-parse --show-toplevel` fails (not a work tree), `wt` falls back to `git-common-dir` (`.bare/`), and the worktree may be created inside `.bare/` instead of workspace root. Those malformed worktrees cause pre-commit to fail (`git toplevel unexpectedly empty`).
@@ -218,237 +248,12 @@ git pull
 
 ---
 
-## Option A: Fresh Setup (from GitHub URL)
+## Detailed references
 
-### Quick setup with setup-workspace.sh (recommended)
+For lower-frequency setup and ecosystem details, load these references only when needed:
 
-Use the setup script to automate the entire setup:
-
-```bash
-# Fresh setup from remote URL
-bash ~/.letta/skills/bare-repo-workspaces/scripts/setup-workspace.sh <repo-url> <target-dir> [--copy-from <old-clone>] [--main-branch <branch>]
-
-# Example:
-bash ~/.letta/skills/bare-repo-workspaces/scripts/setup-workspace.sh git@github.com:etalab-ia/skills.git ~/Code/alliance/skills
-
-# With optional env file copy from existing clone:
-bash ~/.letta/skills/bare-repo-workspaces/scripts/setup-workspace.sh git@github.com:org/repo.git ~/projects/repo --copy-from ~/old-clone
-```
-
-The script handles:
-- Bare clone with `--single-branch`
-- `.git` pointer file creation
-- Git config (fetch, relative paths, signing)
-- Creating the primary worktree (detaches HEAD first to avoid conflicts)
-- Copying `.env` files from an existing clone (if `--copy-from` provided)
-- Creating placeholder directories (`feat/`, `fix/`, `hotfix/`, `docs/`)
-
----
-
-### Manual setup (if setup-workspace.sh unavailable)
-
-### Determine the workspace location
-
-**When the user starts from a parent directory** (e.g., `~/Code/alliance`) and provides a GitHub URL (e.g., `git@github.com:etalab-ia/skills.git`):
-
-1. **Derive the workspace name from the repo name** — extract the final segment before `.git`:
-   - `git@github.com:etalab-ia/skills.git` → workspace name is `skills`
-   - `https://github.com/org/my-project.git` → workspace name is `my-project`
-
-2. **Create the workspace as a SUBDIRECTORY of the current working directory**:
-   - Current directory: `~/Code/alliance`
-   - GitHub URL: `git@github.com:etalab-ia/skills.git`
-   - Workspace path: `~/Code/alliance/skills`
-
-3. **Do NOT create the bare repo directly in the current directory** — this would pollute the parent with `.bare/`, `.git`, and worktree directories mixed alongside other projects.
-
-```bash
-# Example: User is in ~/Code/alliance, URL is git@github.com:etalab-ia/skills.git
-
-# 1. Create the workspace directory as a subdirectory of current location
-mkdir skills && cd skills
-
-# Now in ~/Code/alliance/skills — proceed with bare clone
-```
-
-**When the user explicitly specifies a workspace path** (e.g., "create workspace at ~/projects/my-project"):
-
-```bash
-mkdir -p ~/projects/my-project && cd ~/projects/my-project
-```
-
----
-
-### Complete setup sequence
-
-Once you've created and entered the workspace directory (whether derived from URL or explicitly specified), run the following:
-
-```bash
-# 2. Bare clone (--single-branch avoids creating 60+ stale local branches)
-git clone --bare --single-branch git@github.com:org/repo.git .bare
-
-# 3. Create the .git POINTER FILE (not a folder — this is the magic)
-echo "gitdir: ./.bare" > .git
-
-# 4. Configure fetch for all remote branches
-git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-
-# 5. Enable commit signing
-git config commit.gpgsign true
-
-# 6. Fetch all remote branches
-git fetch --all
-
-# 7. Create the primary worktree at workspace root
-# NOTE: Letta Code's Bash tool intercepts literal `git worktree add` and forces
-# `.letta/worktrees/` paths (letta-ai/letta-code#1829). Variable indirection evades
-# the static matcher. Prefer `setup-workspace.sh` which already includes this workaround.
-_git=git; "$_git" worktree add main main
-git -C main branch --set-upstream-to=origin/main main
-
-# 9. Copy secrets into main/ (source of truth)
-cp /path/to/old/.env main/.env
-cp /path/to/old/apps/server/.env main/apps/server/.env
-# ... etc
-
-# 10. Install dependencies
-cd main && pnpm install   # Node
-# cd main && uv sync      # Python
-
-# 11. Add worktrunk config
-mkdir -p .config
-cat > .config/wt.toml << 'EOF'
-[pre-start]
-deps = "pnpm install"
-
-[post-start]
-copy = "wt step copy-ignored"
-EOF
-
-# 12. Add .worktreeinclude to scope what copy-ignored copies
-cat > main/.worktreeinclude << 'EOF'
-.env
-.envrc
-.turbo/
-# Note: .next/ is intentionally excluded (branch-specific cache, risky to copy)
-EOF
-
-# 13. Set worktree path in user config
-wt config show   # verify project ID
-# Add to ~/.config/worktrunk/config.toml:
-# [projects."github.com/org/repo"]
-# worktree-path = "{{ branch | sanitize }}"
-```
-
----
-
-## Option B: Upgrade Existing Workspace / Checkout (`--upgrade`)
-
-Use the helper script to upgrade in place.
-
-### 1) Standard checkout (`.git` directory) → bare workspace format
-
-```bash
-# IMPORTANT: run from OUTSIDE the workspace
-bash ~/.letta/skills/bare-repo-workspaces/scripts/setup-workspace.sh --upgrade ~/projects/my-project --main-branch main
-```
-
-### 2) Existing bare workspace using `worktrees/` layout → root-level layout
-
-```bash
-# IMPORTANT: run from OUTSIDE the workspace
-bash ~/.letta/skills/bare-repo-workspaces/scripts/setup-workspace.sh --upgrade ~/projects/my-project --main-branch main
-```
-
-The script auto-detects the workspace type and applies the right migration path.
-
-### 3) Update Worktrunk user config
-
-```toml
-# ~/.config/worktrunk/config.toml
-worktree-path = "{{ branch | sanitize }}"
-```
-
-### 4) Verify
-
-```bash
-git -C ~/projects/my-project worktree list
-```
-
----
-
-## Per-Ecosystem: Dependencies
-
-### Node.js (pnpm)
-
-```toml
-[pre-start]
-deps = "pnpm install"
-
-[post-start]
-copy = "wt step copy-ignored"  # copies .env, .turbo/ cache from primary worktree
-```
-
-**Gotchas:**
-- Lock files (`pnpm-lock.yaml`) are git-tracked — already in every worktree, do NOT include in `.worktreeinclude`
-- `.npmrc` with auth tokens → put in `main/`, add to `.worktreeinclude`
-
-### Python (uv)
-
-```toml
-[pre-start]
-deps = "uv sync"
-# Don't copy .venv/ — virtual envs have hardcoded absolute paths
-```
-
-**Gotchas:**
-- **Wrong venv**: If `VIRTUAL_ENV` points to another worktree's `.venv`, tests run against wrong code. Use `uv run python -m pytest` — always uses local `.venv`.
-- **Stale shebangs**: `.venv/bin/*` scripts have path hardcoded. Moving the repo breaks them. Fix: `rm -rf .venv && uv sync`.
-- **Pre-commit hooks + unstaged files**: If a hook auto-modifies a file with unstaged changes in the same file, commit rolls back. Fix: `git stash push -- <file>` before committing.
-
-### Mixed Python + Node
-
-```toml
-[pre-start]
-deps = "uv sync && pnpm install"
-```
-
----
-
-## Monorepo: Nested Env Files
-
-For monorepos with app-level secrets (`apps/server/.env`, `apps/client/.env`), list each in `.worktreeinclude`:
-
-```
-# .worktreeinclude
-.env
-apps/server/.env
-apps/client/.env
-apps/mobile/.env
-apps/storybook/.env
-.turbo/
-# .next/ intentionally excluded — branch-specific, risky to copy
-```
-
-`wt step copy-ignored` handles the nested structure automatically — it copies each listed file from the primary worktree into the same path in the new worktree.
-
----
-
-## Build Tool Gotchas
-
-### Moon v1 (moonrepo)
-
-Moon v1 doesn't support bare repo worktrees ([moonrepo/moon#2162](https://github.com/moonrepo/moon/issues/2162)):
-
-1. **Git errors in moon tasks** — Workaround: `export GIT_WORK_TREE := justfile_directory()` in `justfile`
-2. **Orphaned processes** — Moon exits early but dev servers keep running, holding ports. Fix: bypass moon for dev servers, use `just run <app>` directly.
-
-Both issues are fixed in moon v2.
-
-### Cargo (Rust)
-
-- `target/` is per-worktree — add to `.worktreeinclude` for fast reflink copies
-- `.cargo/credentials.toml` → put in `main/`, add to `.worktreeinclude`
+- [Setup and upgrade workflows](references/setup.md) — fresh setup, manual setup, and upgrade paths.
+- [Ecosystem and build-tool gotchas](references/ecosystem-gotchas.md) — pnpm, uv, monorepos, Moon, and Cargo notes.
 
 ---
 
