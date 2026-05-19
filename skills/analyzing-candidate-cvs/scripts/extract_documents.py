@@ -36,8 +36,13 @@ def extract_docx(path: Path) -> str:
     for i, table in enumerate(doc.tables, 1):
         chunks.append(f"\n--- Tableau {i} ---")
         for row in table.rows:
-            cells = [cell.text.strip() for cell in row.cells]
-            chunks.append(" | ".join(cells))
+            cells = []
+            for cell in row.cells:
+                text = cell.text.strip()
+                if not cells or text != cells[-1]:
+                    cells.append(text)
+            if any(cells):
+                chunks.append(" | ".join(cells))
     return "\n".join(chunks)
 
 
@@ -73,7 +78,7 @@ def main() -> int:
 
     for path in sorted(files):
         rel = path.relative_to(root)
-        target = out / (str(rel).replace("/", "__") + ".txt")
+        target = out / (rel.as_posix().replace("/", "__") + ".txt")
         try:
             text = extract_file(path)
             target.write_text(text, encoding="utf-8")
