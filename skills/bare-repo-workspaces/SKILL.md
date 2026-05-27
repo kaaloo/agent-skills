@@ -237,8 +237,8 @@ cd ~/projects/my-project       # workspace root
 # or: wt switch ^              # switch to primary worktree
 
 # 2. Refresh the base branch so merged detection is accurate
-cd main && git pull --ff-only && cd ..
-# For repos using `dev` as the base: cd dev && git pull --ff-only && cd ..
+git -C main pull --ff-only
+# For repos using `dev` as the base: git -C dev pull --ff-only
 
 # 3. Then remove
 wt remove feat/my-feature      # removes worktree + deletes branch if merged
@@ -285,7 +285,7 @@ For lower-frequency setup and ecosystem details, load these references only when
 | **New worktree starts stale / conflicts** | Primary worktree behind `origin` when `wt switch --create` runs | Add `pre-switch` hook: `test -d \"{{ repo_path }}/main\" && git -C \"{{ repo_path }}/main\" pull --ff-only` |
 | **Agent executes manual steps instead of using setup script** | Skill documentation showed manual steps before scripts section | Always check `scripts/` directory first — use `setup-workspace.sh` for fresh setup |
 | **`pnpm install` (or `uv sync`) doesn't run when switching back to existing worktree** | `pre-start` / `post-start` only fire for NEW worktrees; `wt switch main` on an existing worktree skips them entirely | Add `[post-switch] deps = \"pnpm install\"` to `.config/wt.toml` |
-| **`wt remove` says branch is unmerged after PR merged** | Local base branch (e.g. `main`, `dev`) is stale — hasn't pulled the merge commit from origin | Refresh the base branch first: `cd main && git pull --ff-only && cd ..`. Only use `wt remove -D` after independently verifying the PR/branch is actually merged (e.g. `gh pr view` or `git log --oneline origin/main..origin/<branch>`) |
+| **`wt remove` says branch is unmerged after PR merged** | Local base branch (e.g. `main`, `dev`) is stale — hasn't pulled the merge commit from origin | Refresh the base branch first: `git -C main pull --ff-only`. Only use `wt remove -D` after independently verifying the PR/branch is actually merged (e.g. `gh pr view` or `git log --oneline origin/main..origin/<branch>`) |
 | **Antigravity / IDE fails to open workspace** | `repositoryformatversion = 1` with `worktree.useRelativePaths = true` or `extensions.relativeWorktrees = true` breaks Git parsers | Run `doctor.sh --fix <workspace>` to fix |
 
 ---
