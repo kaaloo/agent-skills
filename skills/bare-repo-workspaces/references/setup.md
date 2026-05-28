@@ -119,8 +119,7 @@ EOF
 # 13. Set worktree path in user config
 wt config show   # verify project ID
 # Add to ~/.config/worktrunk/config.toml:
-# [projects."github.com/org/repo"]
-# worktree-path = "{{ branch | sanitize }}"
+# worktree-path = "{{ repo_path }}/../{{ branch | sanitize }}"
 ```
 
 ---
@@ -149,7 +148,7 @@ The script auto-detects the workspace type and applies the right migration path.
 
 ```toml
 # ~/.config/worktrunk/config.toml
-worktree-path = "{{ branch | sanitize }}"
+worktree-path = "{{ repo_path }}/../{{ branch | sanitize }}"
 ```
 
 ### 4) Verify

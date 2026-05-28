@@ -301,7 +301,7 @@ run_upgrade_mode() {
   echo "Upgrade complete."
   echo ""
   echo "Recommended Worktrunk setting:"
-  echo "  worktree-path = \"{{ branch | sanitize }}\""
+  echo "  worktree-path = \"{{ repo_path }}/../{{ branch | sanitize }}\""
 }
 
 run_fresh_setup_mode() {
