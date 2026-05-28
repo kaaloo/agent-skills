@@ -138,8 +138,10 @@ Press `y` — saved to `~/.config/worktrunk/config.toml`, never asked again (unl
 
 ```toml
 # ~/.config/worktrunk/config.toml
-# Global default — all repos use <branch-sanitized>/ at workspace root
-worktree-path = "{{ branch | sanitize }}"
+# Global default for the bare repo workspace pattern:
+# repo_path resolves to .bare for bare repositories, so ../ lands at the
+# workspace root beside main/.
+worktree-path = "{{ repo_path }}/../{{ branch | sanitize }}"
 ```
 
 If one repo needs a different layout, override just that one:
@@ -156,14 +158,15 @@ worktree-path = "../.worktrees/{{ branch | sanitize }}"
 
 ```toml
 # ~/.config/worktrunk/config.toml
-# repo_path is the workspace root; main worktree is a subdirectory
+# repo_path resolves to .bare for bare repositories; main worktree is ../main
 [pre-switch]
-sync = "test -d \"{{ repo_path }}/main\" && git -C \"{{ repo_path }}/main\" pull --ff-only 2>/dev/null || true"
+sync = "test -d \"{{ repo_path }}/../main\" && git -C \"{{ repo_path }}/../main\" pull --ff-only 2>/dev/null || true"
 ```
 
 This runs before every `wt switch`, fast-forwarding the primary worktree to match origin. `test -d` ensures the hook skips gracefully when no worktree exists yet. `--ff-only` ensures it never creates merge commits, and `|| true` means it won't block if there's no network.
 
-For repos where the primary worktree is a sibling (not inside the repo):
+For non-bare repos or legacy layouts where repo_path is the checkout root and
+you intentionally want worktrees inside that checkout, override that project:
 
 ```toml
 [projects."github.com/org/other-repo"]
@@ -280,9 +283,9 @@ For lower-frequency setup and ecosystem details, load these references only when
 | **Shell dies after `mv` during in-place migration** | `mv` invalidates CWD — all commands fail | `cd` out of the repo before the rename |
 | **`git worktree add` fails: "already used"** | Bare clone HEAD points to main branch, making it "used" | Detach HEAD first: `git symbolic-ref HEAD refs/heads/__bare_placeholder__` (setup-workspace.sh does this automatically) |
 | **`Error: Worktrees must be created under .letta/worktrees/`** | **Emitted by Letta Code's Bash tool, NOT git.** The tool statically scans command strings (and invoked script file contents) for the literal `git worktree add` and rejects paths not starting with `.letta/worktrees/`. Tracked upstream: [letta-ai/letta-code#1829](https://github.com/letta-ai/letta-code/issues/1829) | Use `wt switch --create <branch>` instead (evades the matcher by argument shape). For initial bootstrap where no worktree exists yet, use variable indirection: `_git=git; "$_git" worktree add <path>`. `setup-workspace.sh` already applies this workaround. Do NOT follow the error's suggestion — `.letta/worktrees/` is wrong for this skill's layout. |
-| **`wt switch --create` creates worktree in `.bare/` instead of workspace root** | Running `wt` from workspace root instead of inside primary worktree | `cd main` BEFORE `wt switch --create` |
+| **`wt switch --create` creates worktree in `.bare/` instead of workspace root** | In bare repos, Worktrunk's `repo_path` resolves to `.bare`, and relative `worktree-path = "{{ branch | sanitize }}"` resolves from `.bare`; running from workspace root can also confuse repo detection | Set global `worktree-path = "{{ repo_path }}/../{{ branch | sanitize }}"` for the bare-workspace pattern, and run `cd main` before `wt switch --create` |
 | **Need to upgrade old `worktrees/` layout to root-level** | Earlier setup used `worktrees/<branch>` | Run `setup-workspace.sh --upgrade <workspace-dir>` from outside the workspace |
-| **New worktree starts stale / conflicts** | Primary worktree behind `origin` when `wt switch --create` runs | Add `pre-switch` hook: `test -d \"{{ repo_path }}/main\" && git -C \"{{ repo_path }}/main\" pull --ff-only` |
+| **New worktree starts stale / conflicts** | Primary worktree behind `origin` when `wt switch --create` runs | Add `pre-switch` hook: `test -d \"{{ repo_path }}/../main\" && git -C \"{{ repo_path }}/../main\" pull --ff-only 2>/dev/null || true` |
 | **Agent executes manual steps instead of using setup script** | Skill documentation showed manual steps before scripts section | Always check `scripts/` directory first — use `setup-workspace.sh` for fresh setup |
 | **`pnpm install` (or `uv sync`) doesn't run when switching back to existing worktree** | `pre-start` / `post-start` only fire for NEW worktrees; `wt switch main` on an existing worktree skips them entirely | Add `[post-switch] deps = \"pnpm install\"` to `.config/wt.toml` |
 | **`wt remove` says branch is unmerged after PR merged** | Local base branch (e.g. `main`, `dev`) is stale — hasn't pulled the merge commit from origin | Refresh the base branch first: `git -C main pull --ff-only`. Only use `wt remove -D` after independently verifying the PR/branch is actually merged (e.g. `gh pr view` or `git log --oneline origin/main..origin/<branch>`) |
@@ -296,7 +299,7 @@ For lower-frequency setup and ecosystem details, load these references only when
 - **Run `wt switch --create` from INSIDE the primary worktree** (`main/`) — NEVER from workspace root. Running from root can create malformed worktrees in `.bare/`
 - `main/` is the **source of truth** for all shared files — pull frequently, **never commit work directly to it**
 - **`wt step copy-ignored` + `.worktreeinclude`** handles gitignored files (`.env`, build caches) — no manual symlink setup needed
-- **All** worktrees — including the primary — live at workspace root — configured via `worktree-path` in worktrunk user config
+- **All** worktrees — including the primary — live at workspace root — configure Worktrunk user config with `worktree-path = "{{ repo_path }}/../{{ branch | sanitize }}"` for bare workspaces
 - Each worktree has its own `node_modules` / `.venv` — automate via `.config/wt.toml` hooks
 - Keep 2–4 active worktrees max; `wt step prune` to remove stale ones
 - Open a **specific worktree** in your IDE, not the workspace root
