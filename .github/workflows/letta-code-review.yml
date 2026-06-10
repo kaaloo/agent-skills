@@ -31,7 +31,20 @@ jobs:
             publishes Agent Skills, also check that changed skills follow the
             repository guidance: valid SKILL.md frontmatter, required fields,
             descriptions that clearly state when to use the skill, and no
-            unnecessary large content in the main skill file. Focus only on
-            actionable findings introduced by this PR. Be concise, cite concrete
-            files or lines when possible, and avoid commenting when there is no
-            material issue to raise.
+            unnecessary large content in the main skill file.
+
+            Publish the review outcome on the pull request with the GitHub CLI;
+            do not rely on your final assistant response or the GitHub Actions
+            step summary as the user-facing review. Use $GITHUB_REPOSITORY and
+            $GITHUB_PR_NUMBER when posting comments.
+
+            If there are no material issues, post exactly one concise PR comment
+            saying that Letta Code reviewed the pull request and found no
+            material issues. Include the reviewed commit SHA.
+
+            If there are material issues, post one PR comment per issue, similar
+            in spirit to Gemini Code Assist: include a short severity label, a
+            concrete file/line reference when possible, why the issue matters,
+            and a specific fix direction. Focus only on actionable findings
+            introduced by this PR. Do not post comments for praise, summaries,
+            or non-material observations.
