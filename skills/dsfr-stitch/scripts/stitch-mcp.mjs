@@ -104,7 +104,15 @@ async function main() {
 
   if (command === 'call') {
     if (!maybeTool) { usage(); process.exit(2); }
-    const args = maybeJson ? JSON.parse(maybeJson) : {};
+    let args = {};
+    if (maybeJson) {
+      try {
+        args = JSON.parse(maybeJson);
+      } catch (error) {
+        console.error(`Error: Invalid JSON arguments: ${error.message}`);
+        process.exit(1);
+      }
+    }
     const { parsed } = await rpc('tools/call', { name: maybeTool, arguments: args }, headers, 5);
     if (parsed.error) throw new Error(parsed.error.message);
     console.log(JSON.stringify(parsed.result, null, 2));

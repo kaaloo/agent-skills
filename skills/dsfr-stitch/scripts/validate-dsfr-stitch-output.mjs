@@ -18,15 +18,23 @@ const findings = [];
 function add(file, severity, message) { findings.push({ file, severity, message }); }
 
 for (const file of files) {
-  const text = fs.readFileSync(file, 'utf8');
+  let text;
+  try {
+    const stat = fs.statSync(file);
+    if (!stat.isFile()) continue;
+    text = fs.readFileSync(file, 'utf8');
+  } catch (error) {
+    console.error(`Error reading ${file}: ${error.message}`);
+    continue;
+  }
   const base = path.basename(file);
   const lower = text.toLowerCase();
 
-  const isCodeArtifact = /\.(html|tsx|jsx|vue|svelte)$/i.test(file);
-  if (isCodeArtifact && /class="[^"]*(?:\bp-|\bm-|\bgrid\b|\bflex\b|\brounded|\bshadow)/i.test(text)) {
+  const isCodeArtifact = /\.(html|tsx|jsx|ts|js|mjs|cjs|vue|svelte)$/i.test(file);
+  if (isCodeArtifact && /class(?:Name)?="[^"]*(?:\bp-|\bm-|\bgrid\b|\bflex\b|\brounded|\bshadow)/i.test(text)) {
     add(base, 'warning', 'Looks Tailwind/generic. Translate concepts to react-dsfr utilities and components before production.');
   }
-  if (/from ['"](?:@radix-ui|lucide-react|[^'"]*shadcn)|components\/ui\//i.test(text)) {
+  if (isCodeArtifact && /from ['"](?:@radix-ui|lucide-react|[^'"]*shadcn)|components\/ui\//i.test(text)) {
     add(base, 'error', 'shadcn/Radix/Lucide implementation pattern detected; not a DSFR production path.');
   }
   if (!/marianne/i.test(text)) add(base, 'warning', 'Marianne typography not found. Verify DSFR font handling in implementation.');
