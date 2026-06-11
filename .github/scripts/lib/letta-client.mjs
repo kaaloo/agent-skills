@@ -18,7 +18,7 @@ const DEFAULT_BASE_URL = 'https://api.letta.com';
  * @param {string} args.systemPrompt - System prompt sent as the first message in the request.
  * @param {string} args.apiKey - Letta API key.
  * @param {string} [args.baseUrl] - Override for the API base URL (testing only).
- * @param {string} [args.model] - Model handle to pass through to the Letta request.
+ * @param {string} [args.model] - Model handle to use as a per-call override.
  * @param {number} [args.timeoutMs=120000] - Request timeout.
  * @returns {Promise<{text: string, messages: Array}>}
  */
@@ -43,9 +43,9 @@ export async function sendAgentMessage({
       { role: 'user', content: userMessage },
     ],
     // Ask the model not to think out loud; we only want the JSON block.
-    stream: false,
+    streaming: false,
   };
-  if (model) body.model = model;
+  if (model) body.override_model = model;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

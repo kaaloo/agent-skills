@@ -5,8 +5,9 @@
 // invalid ones before posting.
 //
 // The parser handles the conventional "diff --git a/... b/..." format
-// produced by `git diff` and the GitHub PR `patch` field, including
-// "new file mode", "deleted file mode", and rename headers.
+// produced by `git diff` and the GitHub PR diff endpoint, including
+// "new file mode", "deleted file mode", rename headers, and quoted
+// paths such as `"a/file name.txt" "b/file name.txt"`.
 
 /**
  * Build a map of path -> Set<line_number> of valid RIGHT-side anchors
@@ -90,16 +91,66 @@ export function parsePatchAnchors(patch) {
 function extractBPath(headerLine) {
   // headerLine is "a/<path> b/<path>" or with quoted paths
   // (e.g. when filenames contain spaces).
+  const quoted = parseQuotedDiffHeader(headerLine);
+  if (quoted) return quoted.newPath;
+
   if (headerLine.includes('\t')) {
     const parts = headerLine.split('\t');
     if (parts.length >= 2) {
-      return stripABPrefix(parts[1].trim());
+      return stripABPrefix(unquoteGitPath(parts[1].trim()));
     }
   }
   // Fall back: split on " b/" separator if present.
   const match = headerLine.match(/^a\/(.+?) b\/(.+)$/);
   if (match) return match[2];
   return null;
+}
+
+function parseQuotedDiffHeader(headerLine) {
+  if (!headerLine.startsWith('"')) return null;
+  const paths = [];
+  let current = '';
+  let escaped = false;
+  let inQuote = false;
+  for (const ch of headerLine) {
+    if (!inQuote) {
+      if (ch === '"') inQuote = true;
+      continue;
+    }
+    if (escaped) {
+      current += decodeGitPathEscape(ch);
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      paths.push(current);
+      current = '';
+      inQuote = false;
+      continue;
+    }
+    current += ch;
+  }
+  if (paths.length < 2) return null;
+  return { oldPath: stripABPrefix(paths[0]), newPath: stripABPrefix(paths[1]) };
+}
+
+function unquoteGitPath(path) {
+  if (!path.startsWith('"') || !path.endsWith('"')) return path;
+  return parseQuotedDiffHeader(`${path} ${path}`)?.newPath ?? path.slice(1, -1);
+}
+
+function decodeGitPathEscape(ch) {
+  // Git quotes common C-style escapes in diff headers. Preserve
+  // unknown escapes as the escaped character, matching Git's visible
+  // path semantics closely enough for GitHub anchor validation.
+  if (ch === 't') return '\t';
+  if (ch === 'n') return '\n';
+  if (ch === 'r') return '\r';
+  return ch;
 }
 
 function stripABPrefix(p) {

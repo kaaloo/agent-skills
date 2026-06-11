@@ -14,7 +14,7 @@
 // Required env:
 //   LETTA_API_KEY
 //   LETTA_AGENT_ID
-//   LETTA_MODEL                 (e.g. "MiniMax-M3")
+//   LETTA_MODEL                 (e.g. "lc-minimax/MiniMax-M3")
 //   GITHUB_TOKEN
 //   GITHUB_REPOSITORY           ("owner/repo")
 //   PR_NUMBER
@@ -82,7 +82,7 @@ function extractJsonBlock(text) {
   // an explanation before the block, we ignore it. If it emitted
   // multiple blocks, the last one wins (matches the "single fenced
   // json code block" contract).
-  const matches = [...text.matchAll(/```json\s*\n([\s\S]*?)```/g)];
+  const matches = [...text.matchAll(/```json\s*\n([\s\S]*?)```/gi)];
   if (matches.length > 0) return matches.at(-1)[1].trim();
   // Fallback: try to parse the entire response as JSON. Some models
   // skip the fence when returning the empty array `[]`.
@@ -106,9 +106,9 @@ function parseFindings(jsonText) {
   for (const [i, item] of parsed.entries()) {
     if (!item || typeof item !== 'object') continue;
     const path = typeof item.path === 'string' ? item.path : null;
-    const line = Number.isInteger(item.line) ? item.line : null;
-    const side = item.side === 'LEFT' ? 'LEFT' : 'RIGHT';
-    const severity = isSeverity(item.severity) ? item.severity : null;
+    const line = parseLineNumber(item.line);
+    const side = normalizeSide(item.side);
+    const severity = normalizeSeverity(item.severity);
     const title = typeof item.title === 'string' ? item.title : null;
     const body = typeof item.body === 'string' ? item.body : null;
     const suggestion = typeof item.suggestion === 'string' ? item.suggestion : null;
@@ -118,6 +118,25 @@ function parseFindings(jsonText) {
     findings.push({ path, line, side, severity, title, body, suggestion });
   }
   return { findings, parseError: null };
+}
+
+function parseLineNumber(value) {
+  if (Number.isInteger(value) && value > 0) return value;
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+    const parsed = Number.parseInt(value.trim(), 10);
+    return parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeSide(value) {
+  return typeof value === 'string' && value.toUpperCase() === 'LEFT' ? 'LEFT' : 'RIGHT';
+}
+
+function normalizeSeverity(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.toLowerCase();
+  return isSeverity(normalized) ? normalized : null;
 }
 
 function validateAnchors(findings, anchors) {
@@ -159,6 +178,23 @@ async function fetchPullRequest({ token, owner, repo, pullNumber }) {
   return JSON.parse(text);
 }
 
+async function fetchPullRequestDiff({ token, owner, repo, pullNumber }) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}`;
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github.diff',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'letta-inline-review',
+    },
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`GitHub PR diff GET ${response.status} ${response.statusText}: ${text.slice(0, 500)}`);
+  }
+  return text;
+}
+
 async function main() {
   const token = required('GITHUB_TOKEN');
   const apiKey = required('LETTA_API_KEY');
@@ -178,8 +214,10 @@ async function main() {
 
   appendStepSummary(`### Letta Code inline review\n\nFetching PR #${pullNumber} from ${owner}/${repo} @ ${headSha.slice(0, 7)}...\n`);
 
-  const pr = await fetchPullRequest({ token, owner, repo, pullNumber });
-  const patch = pr.patch ?? '';
+  const [pr, patch] = await Promise.all([
+    fetchPullRequest({ token, owner, repo, pullNumber }),
+    fetchPullRequestDiff({ token, owner, repo, pullNumber }),
+  ]);
   if (!patch.trim()) {
     appendStepSummary('_No patch content in PR response. The PR may be too large to diff, or consist entirely of binary changes. Skipping inline review._\n');
     return;
