@@ -31,7 +31,7 @@ Before modifying a PR branch:
 
 ## Preferred helper script
 
-Use `scripts/finalize-pr-branch.sh` from this skill when available. It fetches a same-repository PR branch, recreates its full diff against the PR base as one locally signed commit, and optionally force-with-lease updates the PR branch.
+Use `scripts/finalize-pr-branch.sh` from this skill when available. It fetches a same-repository PR branch, replays the PR's merge-base diff onto the current base as one locally signed commit, and optionally force-with-lease updates the PR branch.
 
 Dry run / inspect only:
 
