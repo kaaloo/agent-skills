@@ -39,8 +39,8 @@ Dry run / inspect only:
 bash ~/.letta/skills/local-signing-bridge/scripts/finalize-pr-branch.sh \
   --repo ~/Code/org/repo/main \
   --pr 123 \
-  --name "Luis Arias" \
-  --email "kaaloo@gmail.com"
+  --name "Jane Doe" \
+  --email "jane@example.com"
 ```
 
 Apply and update the PR branch:
@@ -49,18 +49,18 @@ Apply and update the PR branch:
 bash ~/.letta/skills/local-signing-bridge/scripts/finalize-pr-branch.sh \
   --repo ~/Code/org/repo/main \
   --pr 123 \
-  --name "Luis Arias" \
-  --email "kaaloo@gmail.com" \
+  --name "Jane Doe" \
+  --email "jane@example.com" \
   --push
 ```
 
 For a checked-out PR branch with exactly one intended commit, a manual amend is acceptable:
 
 ```bash
-GIT_AUTHOR_NAME="Luis Arias" \
-GIT_AUTHOR_EMAIL="kaaloo@gmail.com" \
-GIT_COMMITTER_NAME="Luis Arias" \
-GIT_COMMITTER_EMAIL="kaaloo@gmail.com" \
+GIT_AUTHOR_NAME="Jane Doe" \
+GIT_AUTHOR_EMAIL="jane@example.com" \
+GIT_COMMITTER_NAME="Jane Doe" \
+GIT_COMMITTER_EMAIL="jane@example.com" \
 git commit --amend --no-edit --reset-author
 
 git push --force-with-lease origin HEAD:<pr-branch>
@@ -86,10 +86,10 @@ If this skill is loaded in Railway or another remote worker that lacks the user'
 
 ## Identity selection
 
-Use the user's project/account preference for the final author/committer identity. For Luis's personal `kaaloo/*` repos, use:
-
-```text
-Luis Arias <kaaloo@gmail.com>
-```
+Use the user's project or account preference for the final author/committer identity passed via `--name` and `--email`.
 
 Do not update global Git config from this skill. Prefer command-scoped environment variables or repo-local config only when the user explicitly asks.
+
+## Known limitation
+
+The helper script intentionally squashes the PR into one signed commit by applying a diff from the PR merge base to the PR head. This is safer for stale branches than copying the PR head tree, but it may not preserve rename history as faithfully as a manual commit-by-commit replay. If preserving rename detection or per-commit history is important, use a reviewed manual workflow instead of the helper.

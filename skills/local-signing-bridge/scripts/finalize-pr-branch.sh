@@ -18,7 +18,7 @@ Options:
   --pr NUMBER          Pull request number to finalize.
   --name NAME          Author/committer name for the signed commit.
   --email EMAIL        Author/committer email for the signed commit.
-  --message TEXT       Commit message. Defaults to the PR head commit message.
+  --message TEXT       Commit message. Defaults to the PR title and body.
   --message-file PATH  Read commit message from file.
   --remote NAME        Remote to fetch/push. Defaults to origin.
   --push               Force-with-lease update the PR branch after signing.
@@ -32,6 +32,10 @@ Safety:
   - replays only the PR's merge-base diff onto the current base branch
   - uses --force-with-lease=<expected-head-sha> when pushing
   - never changes Git config
+
+Limitations:
+  - squashed diff/apply finalization may not preserve rename history as
+    faithfully as a manual commit-by-commit replay
 USAGE
 }
 
@@ -107,10 +111,10 @@ repo_owner=${repo_slug%%/*}
 pr_json=$(mktemp)
 
 gh pr view "$pr" --repo "$repo_slug" \
-  --json number,url,title,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner \
+  --json number,url,title,body,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner \
   > "$pr_json"
 
-IFS=$'\t' read -r pr_number pr_url pr_title base_ref head_ref head_oid head_repo head_owner < <(
+IFS=$'\t' read -r pr_number pr_url base_ref head_ref head_oid head_repo head_owner < <(
   python3 - "$pr_json" <<'PY'
 import json, sys
 p = json.load(open(sys.argv[1], encoding="utf-8"))
@@ -119,7 +123,6 @@ head_owner = p.get("headRepositoryOwner") or {}
 fields = [
     str(p.get("number") or ""),
     p.get("url") or "",
-    p.get("title") or "local signed PR finalization",
     p.get("baseRefName") or "",
     p.get("headRefName") or "",
     p.get("headRefOid") or "",
@@ -205,10 +208,14 @@ fi
 if [ -n "$message_file" ]; then
   message=$(cat "$message_file")
 elif [ -z "$message" ]; then
-  message=$(git log -1 --format=%B "$head")
-  if [ -z "$message" ]; then
-    message="$pr_title"
-  fi
+  message=$(python3 - "$pr_json" <<'PY'
+import json, sys
+p = json.load(open(sys.argv[1], encoding="utf-8"))
+title = p.get("title") or "local signed PR finalization"
+body = (p.get("body") or "").strip()
+print(title if not body else f"{title}\n\n{body}")
+PY
+)
 fi
 
 GIT_AUTHOR_NAME="$name" \
