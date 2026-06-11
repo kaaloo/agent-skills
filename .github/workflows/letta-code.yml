@@ -15,8 +15,10 @@ name: Letta Code
 #
 # Both jobs share the same LETTA_AGENT_ID so the agent's long-term
 # memory and the repository's learned conventions stay consistent
-# across surfaces. Both jobs use LETTA_MODEL (defaults to MiniMax-M3)
-# so model plans can be tested without touching this file.
+# across surfaces. Both jobs use LETTA_MODEL so model plans can be
+# tested without touching this file. The Letta API expects the full
+# BYOK model designation (e.g. `lc-minimax/MiniMax-M3`), not the bare
+# model name; set LETTA_MODEL accordingly.
 #
 # See .github/prompts/letta-inline-review.system.md for the review
 # contract and .github/scripts/letta-inline-review.mjs for the
@@ -59,7 +61,6 @@ jobs:
           agent_id: ${{ vars.LETTA_AGENT_ID }}
           model: ${{ vars.LETTA_MODEL }}
           letta_args: --agent ${{ vars.LETTA_AGENT_ID }}
-          track_progress: true
 
   letta-inline-review:
     if: |
