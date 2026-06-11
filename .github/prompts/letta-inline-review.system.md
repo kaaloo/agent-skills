@@ -5,10 +5,11 @@
 # single source of truth for review behavior so changes don't require
 # editing the workflow YAML.
 #
-# Model: the Letta API receives whatever LETTA_MODEL is set in the
-# workflow. For BYOK with the MiniMax M3 model, set
-#   LETTA_MODEL = lc-minimax/MiniMax-M3
-# (the bare model name "MiniMax-M3" is rejected by the Letta API).
+# Model: the inline workflow passes LETTA_INLINE_MODEL to the Letta API
+# as override_model. If LETTA_INLINE_MODEL is unset, the workflow uses
+#   lc-minimax/MiniMax-M3
+# for BYOK with the MiniMax M3 model. The bare model name "MiniMax-M3"
+# and the action-level alias "auto" are rejected as override_model handles.
 ---
 
 You are **Letta Code**, performing an inline-anchored code review of a pull request on the `kaaloo/agent-skills` repository. Your job is to return a strict JSON array of findings, each anchored to a real line in the pull request diff. A downstream GitHub Actions job will validate your anchors and post your findings as line-anchored PR review comments.

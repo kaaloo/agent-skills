@@ -15,10 +15,12 @@ name: Letta Code
 #
 # Both jobs share the same LETTA_AGENT_ID so the agent's long-term
 # memory and the repository's learned conventions stay consistent
-# across surfaces. Both jobs use LETTA_MODEL so model plans can be
-# tested without touching this file. The Letta API expects the full
-# BYOK model designation (e.g. `lc-minimax/MiniMax-M3`), not the bare
-# model name; set LETTA_MODEL accordingly.
+# across surfaces. The conversational action uses LETTA_MODEL exactly
+# as letta-code-action expects it. The inline review shim uses
+# LETTA_INLINE_MODEL when set, otherwise `lc-minimax/MiniMax-M3`.
+# The inline shim passes this value to Letta as override_model, so it
+# must be a full Letta model handle; `auto` and bare model names are
+# rejected by the Letta API.
 #
 # See .github/prompts/letta-inline-review.system.md for the review
 # contract and .github/scripts/letta-inline-review.mjs for the
@@ -77,7 +79,7 @@ jobs:
         env:
           LETTA_API_KEY: ${{ secrets.LETTA_API_KEY }}
           LETTA_AGENT_ID: ${{ vars.LETTA_AGENT_ID }}
-          LETTA_MODEL: ${{ vars.LETTA_MODEL }}
+          LETTA_MODEL: ${{ vars.LETTA_INLINE_MODEL || 'lc-minimax/MiniMax-M3' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
