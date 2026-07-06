@@ -148,10 +148,12 @@ worktree-path = "../worktrees/{{ branch | sanitize }}"
 ```toml
 # ~/.config/worktrunk/config.toml
 [pre-switch]
-sync = "git -C . pull --ff-only 2>/dev/null || true"
+sync = "git -C \"$(git rev-parse --git-common-dir)/..\" pull --ff-only 2>/dev/null || true"
 ```
 
-`--ff-only` ensures it never creates merge commits, and `|| true` means it won't block if there's no network.
+`git rev-parse --git-common-dir` resolves to the primary checkout regardless of which worktree the hook runs from, so the primary checkout is always fast-forwarded. `--ff-only` ensures it never creates merge commits, and `|| true` means it won't block if there's no network.
+
+> Prefer `git -C <directory> <command>` over chaining `cd <directory> && <command> && cd ..` in shell instructions — if the command fails the shell ends up stuck in the subdirectory.
 
 ---
 
