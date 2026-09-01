@@ -22,12 +22,19 @@ Headless dispatch of Google's Antigravity agent CLI. Gives a second model family
 ## One-shot dispatch
 
 ```bash
-agy -p "<self-contained English prompt>" \
+agy -p "$(cat <<'EOF'
+<self-contained English prompt>
+EOF
+)" \
   --add-dir <repo absolute path> \
   --model gemini-3.7-flash-medium --dangerously-skip-permissions --print-timeout 20m
 ```
 
+The quoted heredoc keeps prompt text literal: `$(...)`, backticks, and quotes inside the prompt are neither expanded nor corrupted by the local shell, and the command-substitution output is passed to agy verbatim.
+
 Permission handling is mandatory in headless mode — see Headless permissions and workspace.
+
+- Never pass prompt text through plain double quotes — shell syntax in the prompt (`$(cmd)`, backticks) would execute locally. For long or reused prompts, write them to a file and dispatch with `agy -p "$(cat /path/to/prompt.txt)" ...`; file contents are never re-expanded either.
 
 - Reasoning effort is a model-id suffix: `-low`, `-medium`, `-high`.
 - Read-only consult (no edits): add `--mode plan`.
