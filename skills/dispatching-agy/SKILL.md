@@ -40,15 +40,29 @@ Permission handling is mandatory in headless mode — see Headless permissions a
 - Read-only consult (no edits): add `--mode plan`.
 - Sandboxed terminal: add `--sandbox` (headless still requires command permission — see Headless permissions and workspace).
 - Structured result: `--output-format json`, optionally `--json-schema '<json string or path to schema file>'`.
+- Slash commands (e.g. `/teamwork-preview`) are enabled in print mode by default; pass `--disable-slash-commands` to turn them off. Slash commands with interactive interview/approval phases still need the multi-turn mode below — print mode cannot answer their follow-ups.
 
 ## Multi-turn session (driver keeps the conversation open)
 
 ```bash
-agy -p --input-format stream-json --output-format stream-json \
+agy --print="" --input-format stream-json --output-format stream-json \
   --add-dir <repo absolute path> --dangerously-skip-permissions --model <model-id>
 ```
 
-Reads one NDJSON prompt per stdin line, one turn per message (requires agy >= 1.1.15; `stream-json` input requires `stream-json` output).
+Use `--print=""` (empty value attached with `=`). A bare `-p`/`--print` consumes the next argument — `--input-format` — as its prompt string and the run dies instantly (verified agy 1.1.18; the error suggests `--print='your prompt'`).
+
+Input format (verified 2026-09-01 by trial against agy 1.1.18 — agy rejects the Gemini-style `parts` schema):
+
+```json
+{"event":"user","message":{"role":"user","content":"<text>"}}
+```
+
+- The `event` field is required — without it agy fails with `stream input message is missing the "event" field`.
+- `message` must be an object with `role` and `content` — not a string, not a `parts` array.
+- Output is NDJSON events: `{"event":"init",...}` at session start, `{"event":"result",...}` when a turn completes.
+- Turns are strictly sequential: one stdin line = one turn. Wait for the current turn's `result` event before sending the next line. Naive `sleep 45-60` sequencing between messages works (used successfully), but watching for `result` events is more robust.
+- Use multi-turn for interactive flows: one-shot `-p` cannot answer follow-ups. Anything with an approval or scoping-interview phase (e.g. agy's `/teamwork-preview`) stalls in print mode — the agent waits for input that never comes and the run exits. Send the initial command, wait for its `result`, then send the approval as the next message.
+- Requires agy >= 1.1.15; `stream-json` input requires `stream-json` output.
 
 ## Model roster (verified against agy 1.1.18, 2026-08-22)
 
